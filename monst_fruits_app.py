@@ -153,36 +153,53 @@ with tabs[0]:
     st.subheader("追加")
     col1, col2 = st.columns([1, 2])
 
+    ADD_KEYS = ["add_character", "add_fruit1", "add_fruit2", "add_fruit3", "add_note"]
+
+    def clear_add_inputs():
+        for k in ADD_KEYS:
+            st.session_state[k] = ""
+
+    def save_entry_cb():
+        account = st.session_state.get("add_account", "main")
+        character = st.session_state.get("add_character", "")
+        fruit1 = st.session_state.get("add_fruit1", "")
+        fruit2 = st.session_state.get("add_fruit2", "")
+        fruit3 = st.session_state.get("add_fruit3", "")
+        note = st.session_state.get("add_note", "")
+
+        if not character.strip():
+            st.session_state["add_error"] = "キャラ名は必須！"
+            st.session_state["add_success"] = ""
+            return
+
+        add_entry(
+            account=account.strip(),
+            character=character.strip(),
+            fruit1=fruit1.strip() or None,
+            fruit2=fruit2.strip() or None,
+            fruit3=fruit3.strip() or None,
+            note=note.strip() or None,
+        )
+
+        clear_add_inputs()
+        st.session_state["add_error"] = ""
+        st.session_state["add_success"] = "保存した！"
+
     with col1:
-        # accountは残したいならkey付けなくてOK（残したくないならkey付けてクリア対象に入れる）
-        account = st.selectbox("アカウント", accounts, index=0)
+        st.selectbox("アカウント", accounts, index=0, key="add_account")
 
-        # ✅ keyを付ける（これがないとsession_stateでクリアできない）
-        character = st.text_input("キャラ名（必須）", key="add_character")
-        fruit1 = st.text_input("実1（例：同族加撃）", key="add_fruit1")
-        fruit2 = st.text_input("実2", key="add_fruit2")
-        fruit3 = st.text_input("実3", key="add_fruit3")
-        note = st.text_area("メモ（任意）", key="add_note", height=80)
+        st.text_input("キャラ名（必須）", key="add_character")
+        st.text_input("実1（例：同族加撃）", key="add_fruit1")
+        st.text_input("実2", key="add_fruit2")
+        st.text_input("実3", key="add_fruit3")
+        st.text_area("メモ（任意）", key="add_note", height=80)
 
-        if st.button("保存", type="primary"):
-            if not character.strip():
-                st.error("キャラ名は必須！")
-            else:
-                add_entry(
-                    account=account.strip(),
-                    character=character.strip(),
-                    fruit1=fruit1.strip() or None,
-                    fruit2=fruit2.strip() or None,
-                    fruit3=fruit3.strip() or None,
-                    note=note.strip() or None,
-                )
-                st.success("保存した！")
+        st.button("保存", type="primary", on_click=save_entry_cb)
 
-                # ✅ ここで入力欄をクリア
-                clear_add_inputs()
-
-                # （任意）即時にUIへ反映させたい場合は rerun
-                st.rerun()
+        if st.session_state.get("add_error"):
+            st.error(st.session_state["add_error"])
+        if st.session_state.get("add_success"):
+            st.success(st.session_state["add_success"])
 
     with col2:
         st.info("表記ゆれがあると検索が面倒になるから、キャラ名はできるだけ統一がおすすめ。")
@@ -283,3 +300,4 @@ with tabs[3]:
                     st.success(f"取り込み完了！（{len(rows_in)}行） 一覧/検索タブで確認してね。")
         except Exception as e:
             st.error(f"読み込み失敗：{e}")
+
