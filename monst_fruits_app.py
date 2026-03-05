@@ -129,6 +129,15 @@ def csv_file_to_rows(uploaded_file):
     return rows
 
 # -----------------------
+# 入力クリア用
+# -----------------------
+ADD_KEYS = ["add_character", "add_fruit1", "add_fruit2", "add_fruit3", "add_note"]
+
+def clear_add_inputs():
+    for k in ADD_KEYS:
+        st.session_state[k] = ""
+
+# -----------------------
 # UI
 # -----------------------
 st.set_page_config(page_title="モンスト実管理", layout="wide")
@@ -145,12 +154,15 @@ with tabs[0]:
     col1, col2 = st.columns([1, 2])
 
     with col1:
+        # accountは残したいならkey付けなくてOK（残したくないならkey付けてクリア対象に入れる）
         account = st.selectbox("アカウント", accounts, index=0)
-        character = st.text_input("キャラ名（必須）")
-        fruit1 = st.text_input("実1（例：同族加撃）", value="")
-        fruit2 = st.text_input("実2", value="")
-        fruit3 = st.text_input("実3", value="")
-        note = st.text_area("メモ（任意）", value="", height=80)
+
+        # ✅ keyを付ける（これがないとsession_stateでクリアできない）
+        character = st.text_input("キャラ名（必須）", key="add_character")
+        fruit1 = st.text_input("実1（例：同族加撃）", key="add_fruit1")
+        fruit2 = st.text_input("実2", key="add_fruit2")
+        fruit3 = st.text_input("実3", key="add_fruit3")
+        note = st.text_area("メモ（任意）", key="add_note", height=80)
 
         if st.button("保存", type="primary"):
             if not character.strip():
@@ -166,13 +178,16 @@ with tabs[0]:
                 )
                 st.success("保存した！")
 
+                # ✅ ここで入力欄をクリア
+                clear_add_inputs()
+
+                # （任意）即時にUIへ反映させたい場合は rerun
+                st.rerun()
+
     with col2:
         st.info("表記ゆれがあると検索が面倒になるから、キャラ名はできるだけ統一がおすすめ。")
         st.write("例：")
-        st.code(
-            "main / ルシファー / 同族加撃 / 速必殺 / 将命削り",
-            language="text",
-        )
+        st.code("main / ルシファー / 同族加撃 / 速必殺 / 将命削り", language="text")
 
 with tabs[1]:
     st.subheader("検索（部分一致OK）")
@@ -259,7 +274,6 @@ with tabs[3]:
     if uploaded is not None:
         try:
             rows_in = csv_file_to_rows(uploaded)
-            # 簡単チェック：必要な列があるか
             missing = [h for h in CSV_HEADERS if h not in rows_in[0]]
             if missing:
                 st.error(f"CSVの列が足りない：{missing}")
