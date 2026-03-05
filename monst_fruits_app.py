@@ -10,8 +10,7 @@ DB_PATH = "monst_fruits.db"
 # DB
 # -----------------------
 def get_conn():
-    conn = sqlite3.connect(DB_PATH, check_same_thread=False)
-    return conn
+    return sqlite3.connect(DB_PATH, check_same_thread=False)
 
 def init_db():
     conn = get_conn()
@@ -45,7 +44,7 @@ def add_entry(account, character, fruit1, fruit2, fruit3, note):
     conn.commit()
     conn.close()
 
-def fetch_entries(account=None, char_q=None, fruit_q=None):
+def fetch_entries(account=None, char_q=None, fruit_q=None, note_q=None):
     conn = get_conn()
     q = """
         SELECT id, account, character, fruit1, fruit2, fruit3, note, updated_at
@@ -66,13 +65,16 @@ def fetch_entries(account=None, char_q=None, fruit_q=None):
         q += " AND (fruit1 LIKE ? OR fruit2 LIKE ? OR fruit3 LIKE ?)"
         params.extend([f"%{fruit_q}%"] * 3)
 
+    if note_q:
+        q += " AND note LIKE ?"
+        params.append(f"%{note_q}%")
+
     q += " ORDER BY account ASC, character ASC, updated_at DESC"
     rows = conn.execute(q, params).fetchall()
     conn.close()
     return rows
 
 def insert_many(rows):
-    """rows: list of dict with keys account, character, fruit1, fruit2, fruit3, note"""
     conn = get_conn()
     now = datetime.now().isoformat(timespec="seconds")
     conn.executemany(
@@ -82,17 +84,31 @@ def insert_many(rows):
         """,
         [
             (
-                r.get("account") or "main",
-                r.get("character") or "",
-                r.get("fruit1") or None,
-                r.get("fruit2") or None,
-                r.get("fruit3") or None,
-                r.get("note") or None,
+                (r.get("account") or "main"),
+                (r.get("character") or ""),
+                (r.get("fruit1") or None),
+                (r.get("fruit2") or None),
+                (r.get("fruit3") or None),
+                (r.get("note") or None),
                 now,
             )
             for r in rows
             if (r.get("character") or "").strip() != ""
         ],
+    )
+    conn.commit()
+    conn.close()
+
+def update_entry(entry_id, fruit1, fruit2, fruit3, note):
+    conn = get_conn()
+    now = datetime.now().isoformat(timespec="seconds")
+    conn.execute(
+        """
+        UPDATE entries
+        SET fruit1 = ?, fruit2 = ?, fruit3 = ?, note = ?, updated_at = ?
+        WHERE id = ?;
+        """,
+        (fruit1, fruit2, fruit3, note, now, entry_id),
     )
     conn.commit()
     conn.close()
@@ -129,15 +145,6 @@ def csv_file_to_rows(uploaded_file):
     return rows
 
 # -----------------------
-# 入力クリア用
-# -----------------------
-ADD_KEYS = ["add_character", "add_fruit1", "add_fruit2", "add_fruit3", "add_note"]
-
-def clear_add_inputs():
-    for k in ADD_KEYS:
-        st.session_state[k] = ""
-
-# -----------------------
 # UI
 # -----------------------
 st.set_page_config(page_title="モンスト実管理", layout="wide")
@@ -149,6 +156,9 @@ st.caption("※クラウドは再起動等でDBが消える可能性があるか
 accounts = ["main", "sub1", "sub2"]
 tabs = st.tabs(["➕ 追加", "🔎 検索", "📋 一覧", "💾 バックアップ"])
 
+# -----------------------
+# 追加
+# -----------------------
 with tabs[0]:
     st.subheader("追加")
     col1, col2 = st.columns([1, 2])
@@ -187,7 +197,6 @@ with tabs[0]:
 
     with col1:
         st.selectbox("アカウント", accounts, index=0, key="add_account")
-
         st.text_input("キャラ名（必須）", key="add_character")
         st.text_input("実1（例：同族加撃）", key="add_fruit1")
         st.text_input("実2", key="add_fruit2")
@@ -206,20 +215,26 @@ with tabs[0]:
         st.write("例：")
         st.code("main / ルシファー / 同族加撃 / 速必殺 / 将命削り", language="text")
 
+# -----------------------
+# 検索
+# -----------------------
 with tabs[1]:
     st.subheader("検索（部分一致OK）")
-    c1, c2, c3 = st.columns([1, 2, 2])
+    c1, c2, c3, c4 = st.columns([1, 2, 2, 2])
     with c1:
         account_s = st.selectbox("アカウント", ["ALL"] + accounts, index=0)
     with c2:
         char_q = st.text_input("キャラ名で検索", value="")
     with c3:
         fruit_q = st.text_input("実で検索（例：加撃 / 速必殺 / 将命）", value="")
+    with c4:
+        note_q = st.text_input("メモで検索（あとがき）", value="")
 
     rows = fetch_entries(
         account=account_s,
         char_q=char_q.strip() or None,
         fruit_q=fruit_q.strip() or None,
+        note_q=note_q.strip() or None,
     )
 
     st.write(f"件数：{len(rows)}")
@@ -243,6 +258,9 @@ with tabs[1]:
     else:
         st.warning("該当なし")
 
+# -----------------------
+# 一覧 + 編集
+# -----------------------
 with tabs[2]:
     st.subheader("一覧")
     account_l = st.selectbox("一覧アカウント", ["ALL"] + accounts, index=0)
@@ -253,6 +271,7 @@ with tabs[2]:
         st.dataframe(
             [
                 {
+                    "id": r[0],
                     "account": r[1],
                     "character": r[2],
                     "fruit1": r[3] or "",
@@ -266,9 +285,43 @@ with tabs[2]:
             use_container_width=True,
             hide_index=True,
         )
+
+        st.divider()
+        st.subheader("✏ 編集（実・メモ）")
+
+        options = [(r[0], f"{r[1]} / {r[2]}（更新:{r[7]}）") for r in rows]
+        selected_id = st.selectbox(
+            "編集するキャラを選択",
+            options=options,
+            format_func=lambda x: x[1],
+            key="edit_target",
+        )[0]
+
+        selected_row = next(r for r in rows if r[0] == selected_id)
+
+        with st.form("edit_form"):
+            e_fruit1 = st.text_input("実1", value=selected_row[3] or "", key="edit_f1")
+            e_fruit2 = st.text_input("実2", value=selected_row[4] or "", key="edit_f2")
+            e_fruit3 = st.text_input("実3", value=selected_row[5] or "", key="edit_f3")
+            e_note = st.text_area("メモ（あとがき）", value=selected_row[6] or "", height=80, key="edit_note")
+
+            submitted = st.form_submit_button("この内容で更新")
+            if submitted:
+                update_entry(
+                    entry_id=selected_id,
+                    fruit1=e_fruit1.strip() or None,
+                    fruit2=e_fruit2.strip() or None,
+                    fruit3=e_fruit3.strip() or None,
+                    note=e_note.strip() or None,
+                )
+                st.success("更新した！")
+                st.rerun()
     else:
         st.info("まだ登録なし")
 
+# -----------------------
+# バックアップ
+# -----------------------
 with tabs[3]:
     st.subheader("バックアップ（CSV）")
 
