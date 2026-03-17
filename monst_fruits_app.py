@@ -291,12 +291,12 @@ with tabs[0]:
             fruit3 = st.selectbox("実3", FRUIT_OPTIONS, key="add_fruit3")
         with col_g3:
          grade3 = st.selectbox("等級", GRADE_OPTIONS, key="add_grade3")
-        st.text_area("メモ（任意）", key="add_note", height=80)
         col_f4, col_g4 = st.columns([2,1])
         with col_f4:
             fruit4 = st.selectbox("実4", FRUIT_OPTIONS, key="add_fruit4")
         with col_g4:
             grade4 = st.selectbox("等級", GRADE_OPTIONS, key="add_grade4")
+        st.text_area("メモ（任意）", key="add_note", height=80)
         st.button("保存", type="primary", on_click=save_entry_cb)
 
         if st.session_state.get("add_error"):
