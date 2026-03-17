@@ -9,6 +9,36 @@ DB_PATH = "monst_fruits.db"
 # -----------------------
 # DB
 # -----------------------
+GRADE_OPTIONS = ["", "EL", "特L"]
+FRUIT_OPTIONS = [
+    "",
+    "同族加撃",
+    "同族加命",
+    "同族加撃速",
+    "撃種加撃",
+    "撃種加命",
+    "撃種加撃速",
+    "戦型加撃",
+    "戦型加命",
+    "戦型加撃速",
+    "熱き友撃",
+    "速必殺",
+    "将命削り",
+    "兵命削り",
+    "ケガ減り",
+    "ちび癒し",
+    "毒がまん",
+    "麻痺がまん",
+    "不屈の必殺",
+    "不屈の防御",
+    "学び",
+    "スコア稼ぎ",
+    "Sランク",
+    "荒稼ぎ",
+]
+
+def safe_index(options, value):
+    return options.index(value) if value in options else 0
 def get_conn():
     return sqlite3.connect(DB_PATH, check_same_thread=False)
 
@@ -113,6 +143,12 @@ def update_entry(entry_id, fruit1, fruit2, fruit3, note):
     conn.commit()
     conn.close()
 
+def combine(fruit, grade):
+    if not fruit:
+        return None
+    return f"{fruit}{grade}" if grade else fruit
+
+
 # -----------------------
 # CSV helpers
 # -----------------------
@@ -163,7 +199,12 @@ with tabs[0]:
     st.subheader("追加")
     col1, col2 = st.columns([1, 2])
 
-    ADD_KEYS = ["add_character", "add_fruit1", "add_fruit2", "add_fruit3", "add_note"]
+    ADD_KEYS = [
+    "add_character",
+    "add_fruit1", "add_fruit2", "add_fruit3",
+    "add_grade1", "add_grade2", "add_grade3",
+    "add_note"
+]
 
     def clear_add_inputs():
         for k in ADD_KEYS:
@@ -172,9 +213,21 @@ with tabs[0]:
     def save_entry_cb():
         account = st.session_state.get("add_account", "main")
         character = st.session_state.get("add_character", "")
-        fruit1 = st.session_state.get("add_fruit1", "")
-        fruit2 = st.session_state.get("add_fruit2", "")
-        fruit3 = st.session_state.get("add_fruit3", "")
+        fruit1 = combine(
+            st.session_state.get("add_fruit1", ""),
+            st.session_state.get("add_grade1", "")
+        )
+
+        fruit2 = combine(
+            st.session_state.get("add_fruit2", ""),
+            st.session_state.get("add_grade2", "")
+        )
+
+        fruit3 = combine(
+            st.session_state.get("add_fruit3", ""),
+            st.session_state.get("add_grade3", "")
+        )
+
         note = st.session_state.get("add_note", "")
 
         if not character.strip():
@@ -197,10 +250,22 @@ with tabs[0]:
 
     with col1:
         st.selectbox("アカウント", accounts, index=0, key="add_account")
-        st.text_input("キャラ名（必須）", key="add_character")
-        st.text_input("実1（例：同族加撃）", key="add_fruit1")
-        st.text_input("実2", key="add_fruit2")
-        st.text_input("実3", key="add_fruit3")
+        col_f1, col_g1 = st.columns([2,1])
+        with col_f1:
+            fruit1 = st.selectbox("実1", FRUIT_OPTIONS, key="add_fruit1")
+        with col_g1:
+            grade1 = st.selectbox("等級", GRADE_OPTIONS, key="add_grade1")
+        col_f2, col_g2 = st.columns([2,1])
+        with col_f2:
+            fruit2 = st.selectbox("実2", FRUIT_OPTIONS, key="add_fruit2")
+        with col_g2:
+            grade2 = st.selectbox("等級", GRADE_OPTIONS, key="add_grade2")
+
+        col_f3, col_g3 = st.columns([2,1])
+        with col_f3:
+            fruit3 = st.selectbox("実3", FRUIT_OPTIONS, key="add_fruit3")
+        with col_g3:
+         grade3 = st.selectbox("等級", GRADE_OPTIONS, key="add_grade3")
         st.text_area("メモ（任意）", key="add_note", height=80)
 
         st.button("保存", type="primary", on_click=save_entry_cb)
@@ -300,9 +365,26 @@ with tabs[2]:
         selected_row = next(r for r in rows if r[0] == selected_id)
 
         with st.form("edit_form"):
-            e_fruit1 = st.text_input("実1", value=selected_row[3] or "", key="edit_f1")
-            e_fruit2 = st.text_input("実2", value=selected_row[4] or "", key="edit_f2")
-            e_fruit3 = st.text_input("実3", value=selected_row[5] or "", key="edit_f3")
+            e_fruit1 = st.selectbox(
+                "実1",
+                FRUIT_OPTIONS,
+                index=safe_index(FRUIT_OPTIONS, selected_row[3] or ""),
+                key="edit_f1"
+            )
+
+            e_fruit2 = st.selectbox(
+                "実2",
+                FRUIT_OPTIONS,
+                index=safe_index(FRUIT_OPTIONS, selected_row[4] or ""),
+                key="edit_f2"
+            )
+
+            e_fruit3 = st.selectbox(
+                "実3",
+                FRUIT_OPTIONS,
+                index=safe_index(FRUIT_OPTIONS, selected_row[5] or ""),
+                key="edit_f3"
+            )
             e_note = st.text_area("メモ（あとがき）", value=selected_row[6] or "", height=80, key="edit_note")
 
             submitted = st.form_submit_button("この内容で更新")
@@ -353,4 +435,3 @@ with tabs[3]:
                     st.success(f"取り込み完了！（{len(rows_in)}行） 一覧/検索タブで確認してね。")
         except Exception as e:
             st.error(f"読み込み失敗：{e}")
-
